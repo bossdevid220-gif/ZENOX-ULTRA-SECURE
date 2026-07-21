@@ -2,22 +2,12 @@ const express = require('express');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
-
-// Import Middleware
-const { requireAuth, requireAdmin, verifySession } = require('./middleware/auth');
-const { 
-    globalLimiter, 
-    authLimiter, 
-    adminLimiter,
-    sanitizeInput,
-    xssProtection,
-    securityHeaders 
-} = require('./middleware/security');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -25,7 +15,7 @@ const PORT = process.env.PORT || 10000;
 // ============ TRUST PROXY ============
 app.set('trust proxy', 1);
 
-// ============ DATABASE CONNECTION ============
+// ============ DATABASE ============
 console.log('🔐 CONNECTING TO MONGODB...');
 
 mongoose.connect(process.env.MONGODB_URI, {
@@ -96,7 +86,6 @@ const UserSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Indexes for performance
 UserSchema.index({ deviceId: 1, isActive: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 
@@ -119,7 +108,6 @@ async function createDefaultAdmin() {
             console.log('✅ DEFAULT ADMIN USER CREATED!');
             console.log('📛 ADMIN DEVICE ID: ZENOX-ADMIN-001');
             console.log('🔑 ADMIN PASSWORD: ' + adminPassword);
-            console.log('🔒 THIS IS THE ONLY ADMIN ACCESS POINT!');
         }
     } catch (error) {
         console.log('⚠️ ADMIN USER CREATION ERROR:', error.message);
@@ -131,13 +119,12 @@ const sessionStore = MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     collectionName: 'sessions',
     ttl: 24 * 60 * 60,
-    autoRemove: 'native',
-    touchAfter: 24 * 3600
+    autoRemove: 'native'
 });
 
 // ============ MIDDLEWARE ============
 
-// HELMET - ULTRA SECURE HEADERS
+// HELMET
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -152,50 +139,15 @@ app.use(helmet({
             formAction: ["'self'"]
         }
     },
-    hsts: { 
-        maxAge: 31536000, 
-        includeSubDomains: true, 
-        preload: true 
-    },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
     noSniff: true,
-    referrerPolicy: { 
-        policy: 'same-origin' 
-    },
-    frameguard: { 
-        action: 'deny' 
-    },
-    crossOriginEmbedderPolicy: true,
-    crossOriginOpenerPolicy: { 
-        policy: 'same-origin' 
-    },
-    crossOriginResourcePolicy: { 
-        policy: 'same-origin' 
-    },
-    dnsPrefetchControl: { 
-        allow: false 
-    },
-    expectCt: {
-        maxAge: 86400,
-        enforce: true
-    }
+    referrerPolicy: { policy: 'same-origin' },
+    frameguard: { action: 'deny' }
 }));
 
-// Security Headers
-app.use(securityHeaders);
-
-// Body Parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Data Sanitization
-app.use(sanitizeInput);
-app.use(xssProtection);
-
-// Static Files
 app.use('/static', express.static(path.join(__dirname, '../public')));
-
-// Global Rate Limiter
-app.use(globalLimiter);
 
 // ============ SESSION ============
 app.use(session({
@@ -210,8 +162,7 @@ app.use(session({
         maxAge: 24 * 60 * 60 * 1000,
         path: '/'
     },
-    name: '__Secure-zx-session',
-    rolling: true
+    name: '__Secure-zx-session'
 }));
 
 // ============ CSRF ============
@@ -225,7 +176,7 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
+    if (req.method === 'POST') {
         const token = req.body._csrf || req.headers['x-csrf-token'];
         if (!token || token !== req.session.token) {
             console.log('⚠️ CSRF MISMATCH - REJECTED');
@@ -235,16 +186,47 @@ app.use((req, res, next) => {
     next();
 });
 
-// ============ VERIFY SESSION ============
-app.use(verifySession);
+// ============ RATE LIMITING ============
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: 'TOO MANY ATTEMPTS. ACCOUNT LOCKED FOR 15 MINUTES.',
+    trustProxy: true,
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 // ============ VIEW ENGINE ============
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// ============ AUTH MIDDLEWARE ============
+function requireAuth(req, res, next) {
+    if (!req.session || !req.session.userId) {
+        return res.redirect('/login');
+    }
+    next();
+}
+
+async function requireAdmin(req, res, next) {
+    if (!req.session || !req.session.userId) {
+        return res.redirect('/login');
+    }
+    
+    try {
+        const user = await User.findById(req.session.userId);
+        if (!user || user.role !== 'admin') {
+            return res.status(403).send('⛔ ACCESS DENIED');
+        }
+        next();
+    } catch (error) {
+        return res.status(500).send('SERVER ERROR');
+    }
+}
+
 // ============ ROUTES ============
 
-// ROOT - REDIRECT TO LOGIN
+// ROOT
 app.get('/', (req, res) => {
     res.redirect('/login');
 });
@@ -260,7 +242,7 @@ app.get('/login', (req, res) => {
     });
 });
 
-// LOGIN POST - WITH AUTH LIMITER
+// LOGIN POST
 app.post('/login', authLimiter, async (req, res) => {
     const { deviceId, password } = req.body;
     
@@ -272,11 +254,9 @@ app.post('/login', authLimiter, async (req, res) => {
     }
     
     try {
-        // Find user with password
-        let user = await User.findOne({ deviceId }).select('+passwordHash');
+        let user = await User.findOne({ deviceId });
         
         if (!user) {
-            // Check if access key exists
             const keyExists = await User.findOne({ deviceId: password });
             if (!keyExists) {
                 return res.render('login', { 
@@ -285,14 +265,11 @@ app.post('/login', authLimiter, async (req, res) => {
                 });
             }
             
-            // Create new user
             const hashedPassword = await bcrypt.hash(password, 12);
             user = new User({
                 deviceId: deviceId,
                 passwordHash: hashedPassword,
-                role: 'user',
-                ipAddress: req.ip,
-                userAgent: req.headers['user-agent']
+                role: 'user'
             });
             await user.save();
             console.log(`✅ NEW USER REGISTERED: ${deviceId}`);
@@ -334,8 +311,6 @@ app.post('/login', authLimiter, async (req, res) => {
         user.loginAttempts = 0;
         user.lockUntil = null;
         user.lastLogin = new Date();
-        user.ipAddress = req.ip;
-        user.userAgent = req.headers['user-agent'];
         await user.save();
         
         req.session.userId = user._id;
@@ -358,7 +333,7 @@ app.post('/login', authLimiter, async (req, res) => {
     }
 });
 
-// DASHBOARD - SECURE, AUTH REQUIRED
+// DASHBOARD
 app.get('/dashboard', requireAuth, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId);
@@ -377,8 +352,8 @@ app.get('/dashboard', requireAuth, async (req, res) => {
     }
 });
 
-// ADMIN PANEL - ADMIN ONLY
-app.get('/admin', adminLimiter, requireAdmin, async (req, res) => {
+// ADMIN PANEL
+app.get('/admin', requireAdmin, async (req, res) => {
     try {
         const users = await User.find({}).select('-passwordHash').sort({ createdAt: -1 });
         res.render('admin', { 
@@ -397,7 +372,7 @@ app.get('/admin', adminLimiter, requireAdmin, async (req, res) => {
 });
 
 // ADMIN: TOGGLE USER
-app.post('/admin/user/:id/toggle', adminLimiter, requireAdmin, async (req, res) => {
+app.post('/admin/user/:id/toggle', requireAdmin, async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (user && user.deviceId !== 'ZENOX-ADMIN-001') {
@@ -413,7 +388,7 @@ app.post('/admin/user/:id/toggle', adminLimiter, requireAdmin, async (req, res) 
 });
 
 // ADMIN: DELETE USER
-app.post('/admin/user/:id/delete', adminLimiter, requireAdmin, async (req, res) => {
+app.post('/admin/user/:id/delete', requireAdmin, async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (user && user.deviceId !== 'ZENOX-ADMIN-001') {
@@ -462,14 +437,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🛡️ ZENOX-ULTRA-SECURE RUNNING ON PORT ${PORT}`);
     console.log(`🔐 https://zenox-ultra-secure.onrender.com`);
     console.log(`📱 HEALTH: https://zenox-ultra-secure.onrender.com/health`);
-    console.log('🔒 ALL SECURITY MEASURES ACTIVE:');
-    console.log('   ✅ HTTP-ONLY COOKIES');
-    console.log('   ✅ CSRF PROTECTION');
-    console.log('   ✅ RATE LIMITING');
-    console.log('   ✅ XSS PROTECTION');
-    console.log('   ✅ MONGODB INJECTION PROTECTION');
-    console.log('   ✅ SERVER-SIDE RENDERING');
-    console.log('   ✅ ADMIN-ONLY ROUTES');
 });
 
 // ============ GRACEFUL SHUTDOWN ============
