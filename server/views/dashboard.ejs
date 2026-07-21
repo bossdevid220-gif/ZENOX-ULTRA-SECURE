@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZENOX - DASHBOARD</title>
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
@@ -103,5 +105,68 @@
     
     <div class="footer">ZENOX ULTRA SECURE V2.0</div>
 </div>
+
+<script>
+    // ============================================================
+    // ULTRA SECURE - BLOCK VIEW SOURCE & DEV TOOLS
+    // ============================================================
+    
+    // Block Right Click
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+    });
+
+    // Block Keyboard Shortcuts
+    document.addEventListener('keydown', function(e) {
+        // F12
+        if (e.key === 'F12') {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+U (View Source)
+        if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+Shift+I (Dev Tools)
+        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) {
+            e.preventDefault();
+            return false;
+        }
+        // Ctrl+Shift+C (Inspect)
+        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    // Block view-source: protocol
+    if (window.location.protocol === 'view-source:') {
+        window.location.href = '/dashboard';
+    }
+
+    // Detect Dev Tools (F12, Right Click)
+    let devtools = /./;
+    devtools.toString = function() {
+        // If devtools is open, redirect
+        if (!document.body) return;
+        // Simple detection
+        if (window.outerWidth - window.innerWidth > 160 || 
+            window.outerHeight - window.innerHeight > 160) {
+            window.location.href = '/dashboard';
+        }
+        return '';
+    };
+
+    // Block console.log (prevent logging)
+    console.log = function() {};
+    console.warn = function() {};
+    console.error = function() {};
+    console.info = function() {};
+    console.debug = function() {};
+
+    console.log('🔒 ZENOX ULTRA SECURE - PROTECTED');
+</script>
 </body>
 </html>
