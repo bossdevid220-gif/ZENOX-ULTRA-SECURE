@@ -232,13 +232,23 @@ app.get('/', (req, res) => {
 });
 
 // LOGIN PAGE
+// LOGIN PAGE - WITH DEVICE ID GENERATION
 app.get('/login', (req, res) => {
     if (req.session && req.session.userId) {
         return res.redirect('/dashboard');
     }
+    
+    // Generate device ID on server side
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let deviceId = 'ZX-';
+    for (let i = 0; i < 6; i++) {
+        deviceId += chars[Math.floor(Math.random() * chars.length)];
+    }
+    
     res.render('login', { 
         csrfToken: req.csrfToken(), 
-        error: null 
+        error: null,
+        deviceId: deviceId  // ← Pass device ID to view
     });
 });
 
