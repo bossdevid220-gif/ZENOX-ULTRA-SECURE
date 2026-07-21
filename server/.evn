@@ -1,6 +1,4 @@
 PORT=10000
 SESSION_SECRET=ZENOX_ULTRA_SECURE_KEY_2026_XYZ_987654321_ABCDEF
-MONGODB_URI=mongodb+srv://bossdevid220_db_user:wPPDjxhZxXT3eLpi@cluster0.igsqyac.mongodb.net/?appName=Cluster0
+MONGODB_URI=mongodb+srv://zenox_secure_admin:Zenox@2026#Secure$Ultra!@cluster0.igsqyac.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
 ADMIN_PASSWORD=ZenoxUltraAdmin@2026#Secure$
-JWT_SECRET=ZENOX_JWT_ULTRA_SECURE_2026_XYZ
-ENCRYPTION_KEY=ZENOX_ENC_ULTRA_SECURE_2026_XYZ
