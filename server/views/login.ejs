@@ -110,7 +110,7 @@
     <h1>🔐 ZENOX</h1>
     <p class="sub">ULTRA SECURE AUTHENTICATION</p>
     
-    <div class="device-id" id="deviceIdDisplay">LOADING...</div>
+    <div class="device-id" id="deviceIdDisplay"><%= deviceId %></div>
     
     <% if (error) { %>
         <div class="error"><%= error %></div>
@@ -118,7 +118,7 @@
     
     <form action="/login" method="POST" id="loginForm">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <input type="hidden" name="deviceId" id="deviceIdInput">
+        <input type="hidden" name="deviceId" id="deviceIdInput" value="<%= deviceId %>">
         
         <div class="input-group">
             <label>🔑 ACCESS KEY</label>
@@ -139,65 +139,24 @@
 
 <script>
     // ============================================================
-    // DEVICE ID - FIXED VERSION (Every user gets unique ID)
+    // DEVICE ID - Already set from backend (no generation needed)
     // ============================================================
-    (function() {
-        // Get existing device ID or create new one
-        let deviceId = sessionStorage.getItem('zenox_device_id');
-        
-        if (!deviceId) {
-            // Generate unique device ID
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            let newId = 'ZX-';
-            for (let i = 0; i < 6; i++) {
-                newId += chars[Math.floor(Math.random() * chars.length)];
-            }
-            deviceId = newId;
-            // Store in session storage
-            sessionStorage.setItem('zenox_device_id', deviceId);
-            console.log('✅ NEW DEVICE ID GENERATED:', deviceId);
-        } else {
-            console.log('✅ EXISTING DEVICE ID:', deviceId);
-        }
-        
-        // Display device ID
-        const displayEl = document.getElementById('deviceIdDisplay');
-        if (displayEl) {
-            displayEl.textContent = deviceId;
-        }
-        
-        // Set hidden input value
-        const inputEl = document.getElementById('deviceIdInput');
-        if (inputEl) {
-            inputEl.value = deviceId;
-        }
-        
-        // Also set as data attribute for debugging
-        document.body.setAttribute('data-device-id', deviceId);
-    })();
-
+    console.log('🔑 DEVICE ID FROM SERVER:', document.getElementById('deviceIdInput').value);
+    
     // ============================================================
-    // FORM VALIDATION - Prevent empty submissions
+    // FORM VALIDATION
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const form = document.getElementById('loginForm');
         const passwordInput = document.getElementById('passwordInput');
         const deviceIdInput = document.getElementById('deviceIdInput');
         
-        // Ensure device ID is always set before submit
         form.addEventListener('submit', function(e) {
-            // Check if device ID is set
+            // Check if device ID exists
             if (!deviceIdInput.value || deviceIdInput.value === '') {
-                // Regenerate device ID
-                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-                let newId = 'ZX-';
-                for (let i = 0; i < 6; i++) {
-                    newId += chars[Math.floor(Math.random() * chars.length)];
-                }
-                deviceIdInput.value = newId;
-                sessionStorage.setItem('zenox_device_id', newId);
-                document.getElementById('deviceIdDisplay').textContent = newId;
-                console.log('✅ DEVICE ID REGENERATED:', newId);
+                e.preventDefault();
+                alert('⚠️ DEVICE ID MISSING. PLEASE REFRESH THE PAGE.');
+                return false;
             }
             
             // Check if password is entered
@@ -208,7 +167,8 @@
                 return false;
             }
             
-            console.log('🔐 LOGIN ATTEMPT - Device ID:', deviceIdInput.value);
+            console.log('🔐 SUBMITTING - Device ID:', deviceIdInput.value);
+            console.log('🔐 SUBMITTING - Password:', passwordInput.value ? '✓' : '✗');
             return true;
         });
         
