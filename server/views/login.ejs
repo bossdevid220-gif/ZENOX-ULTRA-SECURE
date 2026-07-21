@@ -91,12 +91,12 @@
             letter-spacing: 0.5px;
         }
         .footer { text-align: center; margin-top: 16px; font-size: 10px; color: #3d2d5a; letter-spacing: 1px; }
-        .highlight { color: #ff6b00; }
         .secure-badge {
             display: flex;
             justify-content: center;
             gap: 16px;
             margin-top: 12px;
+            flex-wrap: wrap;
         }
         .secure-badge span {
             font-size: 9px;
@@ -116,16 +116,16 @@
         <div class="error"><%= error %></div>
     <% } %>
     
-    <form action="/login" method="POST">
+    <form action="/login" method="POST" id="loginForm">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="deviceId" id="deviceIdInput">
         
         <div class="input-group">
             <label>🔑 ACCESS KEY</label>
-            <input type="password" name="password" placeholder="••••••••••••••••" required autocomplete="off">
+            <input type="password" name="password" id="passwordInput" placeholder="••••••••••••••••" required autocomplete="off">
         </div>
         
-        <button type="submit" class="btn">SECURE ACCESS</button>
+        <button type="submit" class="btn" id="loginBtn">SECURE ACCESS</button>
     </form>
     
     <div class="secure-badge">
@@ -138,18 +138,87 @@
 </div>
 
 <script>
+    // ============================================================
+    // DEVICE ID - FIXED VERSION (Every user gets unique ID)
+    // ============================================================
     (function() {
-        let id = sessionStorage.getItem('zx_device_id');
-        if (!id) {
+        // Get existing device ID or create new one
+        let deviceId = sessionStorage.getItem('zenox_device_id');
+        
+        if (!deviceId) {
+            // Generate unique device ID
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
             let newId = 'ZX-';
-            for (let i = 0; i < 6; i++) newId += chars[Math.floor(Math.random() * chars.length)];
-            id = newId;
-            sessionStorage.setItem('zx_device_id', id);
+            for (let i = 0; i < 6; i++) {
+                newId += chars[Math.floor(Math.random() * chars.length)];
+            }
+            deviceId = newId;
+            // Store in session storage
+            sessionStorage.setItem('zenox_device_id', deviceId);
+            console.log('✅ NEW DEVICE ID GENERATED:', deviceId);
+        } else {
+            console.log('✅ EXISTING DEVICE ID:', deviceId);
         }
-        document.getElementById('deviceIdDisplay').textContent = id;
-        document.getElementById('deviceIdInput').value = id;
+        
+        // Display device ID
+        const displayEl = document.getElementById('deviceIdDisplay');
+        if (displayEl) {
+            displayEl.textContent = deviceId;
+        }
+        
+        // Set hidden input value
+        const inputEl = document.getElementById('deviceIdInput');
+        if (inputEl) {
+            inputEl.value = deviceId;
+        }
+        
+        // Also set as data attribute for debugging
+        document.body.setAttribute('data-device-id', deviceId);
     })();
+
+    // ============================================================
+    // FORM VALIDATION - Prevent empty submissions
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('loginForm');
+        const passwordInput = document.getElementById('passwordInput');
+        const deviceIdInput = document.getElementById('deviceIdInput');
+        
+        // Ensure device ID is always set before submit
+        form.addEventListener('submit', function(e) {
+            // Check if device ID is set
+            if (!deviceIdInput.value || deviceIdInput.value === '') {
+                // Regenerate device ID
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let newId = 'ZX-';
+                for (let i = 0; i < 6; i++) {
+                    newId += chars[Math.floor(Math.random() * chars.length)];
+                }
+                deviceIdInput.value = newId;
+                sessionStorage.setItem('zenox_device_id', newId);
+                document.getElementById('deviceIdDisplay').textContent = newId;
+                console.log('✅ DEVICE ID REGENERATED:', newId);
+            }
+            
+            // Check if password is entered
+            if (!passwordInput.value || passwordInput.value === '') {
+                e.preventDefault();
+                alert('⚠️ PLEASE ENTER YOUR ACCESS KEY');
+                passwordInput.focus();
+                return false;
+            }
+            
+            console.log('🔐 LOGIN ATTEMPT - Device ID:', deviceIdInput.value);
+            return true;
+        });
+        
+        // Enter key support
+        passwordInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                form.submit();
+            }
+        });
+    });
 </script>
 </body>
 </html>
