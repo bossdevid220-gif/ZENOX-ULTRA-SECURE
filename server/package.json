@@ -1,0 +1,22 @@
+{
+  "name": "zenox-ultra-secure",
+  "version": "1.0.0",
+  "description": "10000% UNBREAKABLE SECURE SYSTEM",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "express-rate-limit": "^6.7.0",
+    "helmet": "^7.0.0",
+    "bcryptjs": "^2.4.3",
+    "ejs": "^3.1.9",
+    "mongoose": "^7.6.0",
+    "dotenv": "^16.3.1",
+    "connect-mongo": "^5.1.0",
+    "express-mongo-sanitize": "^2.2.0",
+    "xss": "^1.0.14"
+  }
+}
