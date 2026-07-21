@@ -189,7 +189,7 @@ app.use((req, res, next) => {
 // ============ RATE LIMITING ============
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 5,
+    max: 10,
     message: 'TOO MANY ATTEMPTS. ACCOUNT LOCKED FOR 15 MINUTES.',
     trustProxy: true,
     standardHeaders: true,
@@ -231,14 +231,13 @@ app.get('/', (req, res) => {
     res.redirect('/login');
 });
 
-// LOGIN PAGE
-// LOGIN PAGE - WITH DEVICE ID GENERATION
+// LOGIN PAGE - WITH DEVICE ID
 app.get('/login', (req, res) => {
     if (req.session && req.session.userId) {
         return res.redirect('/dashboard');
     }
     
-    // Generate device ID on server side
+    // Generate unique device ID
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let deviceId = 'ZX-';
     for (let i = 0; i < 6; i++) {
@@ -248,33 +247,55 @@ app.get('/login', (req, res) => {
     res.render('login', { 
         csrfToken: req.csrfToken(), 
         error: null,
-        deviceId: deviceId  // ← Pass device ID to view
+        deviceId: deviceId
     });
 });
 
-// LOGIN POST
+// LOGIN POST - WITH FULL ERROR LOGGING
 app.post('/login', authLimiter, async (req, res) => {
+    console.log('🔐 LOGIN ATTEMPT RECEIVED');
+    console.log('📝 BODY:', req.body);
+    
     const { deviceId, password } = req.body;
     
     if (!deviceId || !password) {
+        console.log('❌ MISSING FIELDS');
+        // Generate new device ID for the form
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let newDeviceId = 'ZX-';
+        for (let i = 0; i < 6; i++) {
+            newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+        }
         return res.render('login', { 
             csrfToken: req.csrfToken(), 
-            error: 'ALL FIELDS REQUIRED' 
+            error: 'ALL FIELDS REQUIRED',
+            deviceId: newDeviceId
         });
     }
     
     try {
+        console.log('🔍 SEARCHING FOR USER:', deviceId);
         let user = await User.findOne({ deviceId });
+        console.log('👤 USER FOUND:', user ? 'YES' : 'NO');
         
         if (!user) {
+            console.log('🆕 NEW USER - CHECKING KEY...');
             const keyExists = await User.findOne({ deviceId: password });
             if (!keyExists) {
+                console.log('❌ INVALID KEY');
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let newDeviceId = 'ZX-';
+                for (let i = 0; i < 6; i++) {
+                    newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+                }
                 return res.render('login', { 
                     csrfToken: req.csrfToken(), 
-                    error: 'INVALID CREDENTIALS' 
+                    error: 'INVALID CREDENTIALS',
+                    deviceId: newDeviceId
                 });
             }
             
+            console.log('🔑 CREATING NEW USER...');
             const hashedPassword = await bcrypt.hash(password, 12);
             user = new User({
                 deviceId: deviceId,
@@ -282,39 +303,70 @@ app.post('/login', authLimiter, async (req, res) => {
                 role: 'user'
             });
             await user.save();
-            console.log(`✅ NEW USER REGISTERED: ${deviceId}`);
+            console.log('✅ NEW USER CREATED:', deviceId);
         }
         
         if (!user.isActive) {
+            console.log('❌ ACCOUNT DISABLED');
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let newDeviceId = 'ZX-';
+            for (let i = 0; i < 6; i++) {
+                newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+            }
             return res.render('login', { 
                 csrfToken: req.csrfToken(), 
-                error: 'ACCOUNT DISABLED' 
+                error: 'ACCOUNT DISABLED',
+                deviceId: newDeviceId
             });
         }
         
         if (user.lockUntil && user.lockUntil > Date.now()) {
             const remaining = Math.ceil((user.lockUntil - Date.now()) / 60000);
+            console.log('🔒 ACCOUNT LOCKED');
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let newDeviceId = 'ZX-';
+            for (let i = 0; i < 6; i++) {
+                newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+            }
             return res.render('login', { 
                 csrfToken: req.csrfToken(), 
-                error: `ACCOUNT LOCKED. TRY IN ${remaining} MINUTES` 
+                error: `ACCOUNT LOCKED. TRY IN ${remaining} MINUTES`,
+                deviceId: newDeviceId
             });
         }
         
+        console.log('🔑 VERIFYING PASSWORD...');
         const isValid = await bcrypt.compare(password, user.passwordHash);
+        console.log('✅ PASSWORD VALID:', isValid ? 'YES' : 'NO');
+        
         if (!isValid) {
             user.loginAttempts += 1;
             if (user.loginAttempts >= 5) {
                 user.lockUntil = Date.now() + 15 * 60 * 1000;
                 await user.save();
+                console.log('🔒 TOO MANY ATTEMPTS - LOCKED');
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let newDeviceId = 'ZX-';
+                for (let i = 0; i < 6; i++) {
+                    newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+                }
                 return res.render('login', { 
                     csrfToken: req.csrfToken(), 
-                    error: 'TOO MANY ATTEMPTS. LOCKED 15 MINUTES' 
+                    error: 'TOO MANY ATTEMPTS. LOCKED 15 MINUTES',
+                    deviceId: newDeviceId
                 });
             }
             await user.save();
+            console.log('❌ INVALID PASSWORD');
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let newDeviceId = 'ZX-';
+            for (let i = 0; i < 6; i++) {
+                newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+            }
             return res.render('login', { 
                 csrfToken: req.csrfToken(), 
-                error: 'INVALID CREDENTIALS' 
+                error: 'INVALID CREDENTIALS',
+                deviceId: newDeviceId
             });
         }
         
@@ -327,7 +379,7 @@ app.post('/login', authLimiter, async (req, res) => {
         req.session.role = user.role;
         req.session.deviceId = user.deviceId;
         
-        console.log(`✅ USER LOGGED IN: ${deviceId} (${user.role})`);
+        console.log('✅ USER LOGGED IN:', deviceId, 'ROLE:', user.role);
         
         if (user.role === 'admin') {
             return res.redirect('/admin');
@@ -335,10 +387,17 @@ app.post('/login', authLimiter, async (req, res) => {
         res.redirect('/dashboard');
         
     } catch (error) {
-        console.error('LOGIN ERROR:', error);
+        console.error('🔥 LOGIN ERROR:', error);
+        console.error('📚 STACK:', error.stack);
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let newDeviceId = 'ZX-';
+        for (let i = 0; i < 6; i++) {
+            newDeviceId += chars[Math.floor(Math.random() * chars.length)];
+        }
         res.render('login', { 
             csrfToken: req.csrfToken(), 
-            error: 'SERVER ERROR. TRY AGAIN.' 
+            error: 'SERVER ERROR. PLEASE TRY AGAIN.',
+            deviceId: newDeviceId
         });
     }
 });
@@ -433,7 +492,7 @@ app.get('/health', (req, res) => {
 
 // ============ ERROR HANDLING ============
 app.use((err, req, res, next) => {
-    console.error('SERVER ERROR:', err);
+    console.error('🔥 SERVER ERROR:', err);
     res.status(500).send('SOMETHING WENT WRONG. PLEASE TRY AGAIN LATER.');
 });
 
